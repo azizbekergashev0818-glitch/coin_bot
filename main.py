@@ -1,5 +1,6 @@
 import asyncio
 import sqlite3
+import aiohttp
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
@@ -9,7 +10,11 @@ from aiogram.fsm.state import State, StatesGroup
 API_TOKEN = "8884394536:AAEfDaTV8ra5Ije87PIecA"
 ADMIN_ID = 6913959674
 
-bot = Bot("8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk") 
+SMM_API_KEY = "ad085aabb8ca0d38c4d908dd8e0b7ced"
+SMM_SERVICE_ID = 71
+SMM_API_URL = "https://smmmain.com/api/v2"
+
+bot = Bot("8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk")
 dp = Dispatcher()
 
 class OrderState(StatesGroup):
@@ -43,7 +48,7 @@ def add_user(user_id):
 
 def get_balance(user_id):
     if user_id == ADMIN_ID:
-        return 9999999  # Admin uchun cheksiz balans
+        return 9999999
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
     cursor.execute('SELECT coins FROM users WHERE user_id = ?', (user_id,))
@@ -53,7 +58,7 @@ def get_balance(user_id):
 
 def add_coins(user_id, amount):
     if user_id == ADMIN_ID:
-        return  # Adminning tangasi kamaytirilmaydi
+        return
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET coins = coins + ? WHERE user_id = ?', (amount, user_id))
@@ -75,6 +80,18 @@ def mark_task_completed(user_id, task_id):
     conn.commit()
     conn.close()
 
+async def send_smm_order(link: str, quantity: int):
+    payload = {
+        'key': SMM_API_KEY,
+        'action': 'add',
+        'service': SMM_SERVICE_ID,
+        'link': link,
+        'quantity': quantity
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(SMM_API_URL, data=payload) as response:
+            return await response.json()
+
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [
@@ -91,10 +108,7 @@ main_menu = ReplyKeyboardMarkup(
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
     add_user(message.from_user.id)
-    await message.answer(
-        "Xush kelibsiz! Botimizga 10 coin bonus berildi.",
-        reply_markup=main_menu
-    )
+    await message.answer("Xush kelibsiz! Botimizga 10 coin bonus berildi.", reply_markup=main_menu)
 
 @dp.message(F.text == "💰 Balans")
 async def balance_cmd(message: types.Message):
@@ -150,7 +164,7 @@ async def select_pack(call: types.CallbackQuery, state: FSMContext):
 
     await state.update_data(sub_count=count, coin_price=price)
     await state.set_state(OrderState.waiting_for_link)
-    await call.message.answer(f"Siz {count} ta obunachi paketini tanladingiz ({price} coin).\n\nEndi obuna urilishi kerak bo'lgan Telegram yoki Instagram kanalingiz havolasini yuboring (Masalan: @kanal_nomi):")
+    await call.message.answer(f"Siz {count} ta obunachi paketini tanladingiz ({price} coin).\n\nEndi Telegram kanalingiz havolasini yuboring:")
     await call.answer()
 
 @dp.message(OrderState.waiting_for_link)
@@ -163,21 +177,28 @@ async def process_link(message: types.Message, state: FSMContext):
     target_link = message.text
     
     add_coins(user_id, -price)
-    await message.answer(f"🚀 Buyurtmangiz qabul qilindi!\n\nManzil: {target_link}\nObunachilar: {count} ta\nBajarilgan to'lov: {price} coin.")
     
     try:
+        res = await send_smm_order(target_link, count)
+        order_id = res.get("order", "Noma'lum")
+        
+        await message.answer(f"🚀 Buyurtmangiz qabul qilindi!\n\nManzil: {target_link}\nObunachilar: {count} ta\nBuyurtma ID: #{order_id}")
+        
         await bot.send_message(
             ADMIN_ID, 
-            f"📥 **Yangi buyurtma!**\n\nFoydalanuvchi: @{message.from_user.username} (ID: {user_id})\nManzil: {target_link}\nSoni: {count} ta obunachi\nNarxi: {price} coin"
+            f"📥 Yangi Avto-Buyurtma!\n\nFoydalanuvchi: @{message.from_user.username} (ID: {user_id})\nManzil: {target_link}\nSoni: {count} ta\nSMM Order ID: #{order_id}"
         )
-    except Exception as e:
-        print(f"Adminga xabar yuborishda xato: {e}")
+    except Exception:
+        await message.answer(f"🚀 Buyurtmangiz qabul qilindi!\n\nManzil: {target_link}\nObunachilar: {count} ta.")
+        await bot.send_message(
+            ADMIN_ID, 
+            f"⚠️ Buyurtma tushdi:\nFoydalanuvchi: ID {user_id}\nManzil: {target_link}\nSoni: {count} ta"
+        )
         
     await state.clear()
 
 async def main():
     init_db()
-    print("Bot ishga tushdi...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
