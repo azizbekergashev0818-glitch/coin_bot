@@ -45,9 +45,16 @@ def add_coins(user_id, amount):
 
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="💰 Balans"), KeyboardButton(text="➕ Tanga ishlash")]
+        [
+            KeyboardButton(text="💰 Balans"), 
+            KeyboardButton(text="➕ Tanga ishlash")
+        ],
+        [
+            KeyboardButton(text="🚀 Buyurtma berish")
+        ]
     ],
     resize_keyboard=True
+)
 )
 
 @dp.message(Command("start"))
