@@ -3,12 +3,17 @@ import sqlite3
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 
-API_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk"  
+API_TOKEN = "8884394536:AAEfDaTV8ra5Ije87PIecA"
 ADMIN_ID = 6913959674
 
 bot = Bot("8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk")
 dp = Dispatcher()
+
+class OrderState(StatesGroup):
+    waiting_for_link = State()
 
 def init_db():
     conn = sqlite3.connect('bot_database.db')
@@ -116,30 +121,51 @@ async def check_callback(call: types.CallbackQuery):
 
 @dp.message(F.text == "🚀 Buyurtma berish")
 async def order_cmd(message: types.Message):
-    coins = get_balance(message.from_user.id)
-    if coins < 10:
-        await message.answer(f"Sizda coin yetarli emas. Balans: {coins} coin\nMinimum 10 coin kerak!")
-    else:
-        await message.answer("Buyurtma berish uchun kanal yoki instagram manzilingizni yozing (masalan: @kanal_nomi):")
+    order_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="👤 10 ta obunachi (10 coin)", callback_data="pack_10_10")],
+            [InlineKeyboardButton(text="👤 25 ta obunachi (20 coin)", callback_data="pack_25_20")],
+            [InlineKeyboardButton(text="👤 70 ta obunachi (50 coin)", callback_data="pack_70_50")]
+        ]
+    )
+    await message.answer("Nechta obunachi buyurtma qilmoqchisiz? Tarifni tanlang:", reply_markup=order_kb)
 
-@dp.message(F.text.startswith("@") | F.text.startswith("http"))
-async def process_order(message: types.Message):
-    user_id = message.from_user.id
-    coins = get_balance(user_id)
+@dp.callback_query(F.data.startswith("pack_"))
+async def select_pack(call: types.CallbackQuery, state: FSMContext):
+    _, count, price = call.data.split("_")
+    count, price = int(count), int(price)
     
-    if coins >= 10:
-        add_coins(user_id, -10)
-        target_link = message.text
+    user_coins = get_balance(call.from_user.id)
+    if user_coins < price:
+        await call.answer(f"Sizda yetarli coin yo'q! Kerak: {price} coin, sizda: {user_coins} coin.", show_alert=True)
+        return
+
+    await state.update_data(sub_count=count, coin_price=price)
+    await state.set_state(OrderState.waiting_for_link)
+    await call.message.answer(f"Siz {count} ta obunachi paketini tanladingiz ({price} coin).\n\nEndi obuna urilishi kerak bo'lgan Telegram yoki Instagram kanalingiz havolasini yuboring (Masalan: @kanal_nomi):")
+    await call.answer()
+
+@dp.message(OrderState.waiting_for_link)
+async def process_link(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    count = data.get("sub_count")
+    price = data.get("coin_price")
+    
+    user_id = message.from_user.id
+    target_link = message.text
+    
+    add_coins(user_id, -price)
+    await message.answer(f"🚀 Buyurtmangiz qabul qilindi!\n\nManzil: {target_link}\nObunachilar: {count} ta\nBajarilgan to'lov: {price} coin.")
+    
+    try:
+        await bot.send_message(
+            ADMIN_ID, 
+            f"📥 **Yangi buyurtma!**\n\nFoydalanuvchi: @{message.from_user.username} (ID: {user_id})\nManzil: {target_link}\nSoni: {count} ta obunachi\nNarxi: {price} coin"
+        )
+    except Exception as e:
+        print(f"Adminga xabar yuborishda xato: {e}")
         
-        await message.answer(f"🚀 Buyurtmangiz qabul qilindi!\nManzil: {target_link}\n10 coin ayrib tashlandi.")
-        
-        try:
-            await bot.send_message(
-                ADMIN_ID, 
-                f"📥 **Yangi buyurtma!**\n\nFoydalanuvchi: @{message.from_user.username} (ID: {user_id})\nManzil: {target_link}"
-            )
-        except Exception as e:
-            print(f"Adminga xabar yuborishda xato: {e}")
+    await state.clear()
 
 async def main():
     init_db()
