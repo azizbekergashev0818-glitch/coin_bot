@@ -85,3 +85,10 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+    @dp.message(F.text == "🚀 Buyurtma berish")
+async def order_cmd(message: types.Message):
+    coins = get_balance(message.from_user.id)
+    if coins < 10:
+        await message.answer(f"Sizda coin yetarli emas. Balans: {coins} coin\nMinimum 10 coin kerak!")
+    else:
+        await message.answer("Buyurtma berish uchun kanalingiz havolasini yuboring (masalan: @kanal_nomi):")
