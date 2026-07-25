@@ -5,6 +5,7 @@ import aiohttp
 from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.filters import CommandStart
 
 TELEGRAM_BOT_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk"
 
@@ -20,11 +21,22 @@ class OrderState(StatesGroup):
   waiting_for_quantity = State()
 
 
-@router.message(F.text)
-async def cmd_buyurtma(message: types.Message, state: FSMContext):
-  if message.text == "🚀 Buyurtma berish" or message.text == "/start":
-    await message.answer("Link yuboring:")
-    await state.set_state(OrderState.waiting_for_link)
+@router.message(CommandStart())
+async def cmd_start(message: types.Message, state: FSMContext):
+  await state.clear()
+  await message.answer(
+      "Salom! Bot ishga tushdi.\nBuyurtma berish uchun quyidagi tugmani bosing:",
+      reply_markup=types.ReplyKeyboardMarkup(
+          keyboard=[[types.KeyboardButton(text="🚀 Buyurtma berish")]],
+          resize_keyboard=True,
+      ),
+  )
+
+
+@router.message(F.text == "🚀 Buyurtma berish")
+async def start_order_btn(message: types.Message, state: FSMContext):
+  await message.answer("Link yuboring:")
+  await state.set_state(OrderState.waiting_for_link)
 
 
 @router.message(OrderState.waiting_for_link)
@@ -64,6 +76,16 @@ async def process_quantity(message: types.Message, state: FSMContext):
       await message.answer(f"❌ Xato: {e}")
 
   await state.clear()
+
+
+@router.message(F.text)
+async def catch_all_other_messages(message: types.Message):
+  pass
+
+
+@router.callback_query(F.data)
+async def catch_all_other_callbacks(callback: types.CallbackQuery):
+  await callback.answer()
 
 
 async def handle(request):
