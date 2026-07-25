@@ -4,7 +4,8 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-API_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk" # O'zingizning to'liq tokeningizni qo'ying
+API_TOKEN = "SIZNING_BOTFATHERDAN_OLGAN_TOKENINGIZ"  
+ADMIN_ID = 6913959674
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
@@ -119,7 +120,26 @@ async def order_cmd(message: types.Message):
     if coins < 10:
         await message.answer(f"Sizda coin yetarli emas. Balans: {coins} coin\nMinimum 10 coin kerak!")
     else:
-        await message.answer("Buyurtma berish uchun kanalingiz havolasini yuboring (masalan: @kanal_nomi):")
+        await message.answer("Buyurtma berish uchun kanal yoki instagram manzilingizni yozing (masalan: @kanal_nomi):")
+
+@dp.message(F.text.startswith("@") | F.text.startswith("http"))
+async def process_order(message: types.Message):
+    user_id = message.from_user.id
+    coins = get_balance(user_id)
+    
+    if coins >= 10:
+        add_coins(user_id, -10)
+        target_link = message.text
+        
+        await message.answer(f"🚀 Buyurtmangiz qabul qilindi!\nManzil: {target_link}\n10 coin ayrib tashlandi.")
+        
+        try:
+            await bot.send_message(
+                ADMIN_ID, 
+                f"📥 **Yangi buyurtma!**\n\nFoydalanuvchi: @{message.from_user.username} (ID: {user_id})\nManzil: {target_link}"
+            )
+        except Exception as e:
+            print(f"Adminga xabar yuborishda xato: {e}")
 
 async def main():
     init_db()
