@@ -9,7 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 API_TOKEN = "8884394536:AAEfDaTV8ra5Ije87PIecA"
 ADMIN_ID = 6913959674
 
-bot = Bot("8884394536:AAEfDaTV8ra5Ije87PIecA") 
+bot = Bot("8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk") 
 dp = Dispatcher()
 
 class OrderState(StatesGroup):
