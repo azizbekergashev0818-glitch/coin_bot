@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-API_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk"
+API_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk"  
 ADMIN_ID = 6913959674
 
 SEENSMS_API_URL = "https://seensms.uz/api/v2"
@@ -43,6 +43,9 @@ def add_user(user_id):
     conn.close()
 
 def get_balance(user_id):
+    if user_id == ADMIN_ID:
+        return 999999999  # Siz uchun cheksiz balans
+    
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
     cursor.execute('SELECT coins FROM users WHERE user_id = ?', (user_id,))
@@ -51,6 +54,9 @@ def get_balance(user_id):
     return res[0] if res else 0
 
 def add_coins(user_id, amount):
+    if user_id == ADMIN_ID:
+        return  # Sizning balansingiz o'zgarmaydi (cheksiz qoladi)
+        
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET coins = coins + ? WHERE user_id = ?', (amount, user_id))
@@ -89,14 +95,17 @@ main_menu = ReplyKeyboardMarkup(
 async def start_cmd(message: types.Message):
     add_user(message.from_user.id)
     await message.answer(
-        "Xush kelibsiz! Botimizga 10 coin bonus berildi.",
+        "Xush kelibsiz! Botimizga xush kelibsiz.",
         reply_markup=main_menu
     )
 
 @dp.message(F.text == "💰 Balans")
 async def balance_cmd(message: types.Message):
     coins = get_balance(message.from_user.id)
-    await message.answer(f"Sizning balansingiz: {coins} coin")
+    if message.from_user.id == ADMIN_ID:
+        await message.answer("Sizning balansingiz: ♾️ Cheksiz coin")
+    else:
+        await message.answer(f"Sizning balansingiz: {coins} coin")
 
 @dp.message(F.text == "➕ Tanga ishlash")
 async def earn_cmd(message: types.Message):
@@ -149,8 +158,8 @@ async def process_order(message: types.Message):
                 async with session.post(SEENSMS_API_URL, data=payload) as response:
                     result = await response.json()
                     if "order" in result:
-                        add_coins(user_id, -10)
-                        await message.answer(f"🚀 Buyurtma qabul qilindi!\n🆔 ID: {result['order']}\n10 coin ayirildi.")
+                        add_coins(user_id, -10)  # Admin uchun bu funksiya ishlamaydi, tangasi ketmaydi
+                        await message.answer(f"🚀 Buyurtma qabul qilindi!\n🆔 ID: {result['order']}")
                     else:
                         await message.answer(f"❌ Xato: {result.get('error', 'Nomaʼlum')}")
             except Exception as e:
