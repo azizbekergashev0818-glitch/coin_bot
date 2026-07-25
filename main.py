@@ -4,8 +4,6 @@ import aiohttp
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 API_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk"  
@@ -15,14 +13,10 @@ SEENSMS_API_URL = "https://seensms.uz/api/v2"
 SEENSMS_API_TOKEN = "JQVUUMxTraOhMFXbukUAtjCkNY9VUBhK"
 SERVICE_ID = 452
 
-REQUIRED_CHANNEL = "@telegram"  # Majburiy obuna kanali
+REQUIRED_CHANNEL = "@telegram"  # Majburiy obuna kanali (o'zingizning kanal username yozing)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
-
-# Buyurtma holatlari uchun StatesGroup
-class OrderState(StatesGroup):
-    waiting_for_link = State()
 
 def init_db():
     conn = sqlite3.connect('bot_database.db')
@@ -52,7 +46,7 @@ def add_user(user_id):
 
 def get_balance(user_id):
     if user_id == ADMIN_ID:
-        return 999999999  # Siz uchun cheksiz balans
+        return 999999999  
     
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
@@ -100,8 +94,7 @@ main_menu = ReplyKeyboardMarkup(
 )
 
 @dp.message(Command("start"))
-async def start_cmd(message: types.Message, state: FSMContext):
-    await state.clear()
+async def start_cmd(message: types.Message):
     add_user(message.from_user.id)
     await message.answer(
         "Xush kelibsiz! Botimizga xush kelibsiz.",
@@ -138,30 +131,34 @@ async def check_callback(call: types.CallbackQuery):
     mark_task_completed(call.from_user.id, task_id)
     await call.answer("Topshiriq bajarildi! +2 coin berildi 🎉", show_alert=True)
 
+# "🚀 Buyurtma berish" tugmasi bosilganda avval obunani tekshiramiz
 @dp.message(F.text == "🚀 Buyurtma berish")
-async def order_cmd(message: types.Message, state: FSMContext):
+async def order_cmd(message: types.Message):
     user_id = message.from_user.id
     
-    # Avval majburiy obunani tekshiramiz (Admin uchun shart emas)
+    # Admin uchun obuna tekshirilmaydi
     if user_id != ADMIN_ID:
         try:
             member = await bot.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
             if member.status in ["left", "kicked"]:
-                await message.answer(f"❌ Buyurtma berish uchun avval {REQUIRED_CHANNEL} kanaliga obuna bo'ling!")
+                sub_kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="📢 Kanalga obuna bo'lish", url=f"https://t.me/{REQUIRED_CHANNEL.replace('@', '')}")]
+                    ]
+                )
+                await message.answer(f"❌ Botdan foydalanish uchun avval quyidagi kanalga obuna bo'ling:", reply_markup=sub_kb)
                 return
-        except Exception:
-            pass  
+        except Exception as e:
+            print(f"Obunani tekshirishda xato (bot kanalda admin bo'lishi kerak): {e}")
 
     coins = get_balance(user_id)
     if coins < 10:
         await message.answer(f"Sizda coin yetarli emas. Balans: {coins} coin\nMinimum 10 coin kerak!")
     else:
-        await state.set_state(OrderState.waiting_for_link)
         await message.answer("Buyurtma berish uchun kanal yoki instagram manzilingizni yozing (masalan: @kanal_nomi yoki link):")
 
-# Faqat 'waiting_for_link' holatida bo'lgandagina havolani qabul qiladi
-@dp.message(OrderState.waiting_for_link, F.text.startswith("@") | F.text.startswith("http"))
-async def process_order(message: types.Message, state: FSMContext):
+@dp.message(F.text.startswith("@") | F.text.startswith("http"))
+async def process_order(message: types.Message):
     user_id = message.from_user.id
     coins = get_balance(user_id)
     
@@ -195,13 +192,6 @@ async def process_order(message: types.Message, state: FSMContext):
             )
         except Exception as e:
             print(f"Adminga xabar yuborishda xato: {e}")
-            
-    await state.clear()  # Holatni tozalaymiz
-
-# Agar foydalanuvchi havola o'rniga boshqa narsa yozib yuborsa
-@dp.message(OrderState.waiting_for_link)
-async def wrong_link_format(message: types.Message):
-    await message.answer("❌ Noto'g'ri format! Iltimos, `@` yoki `http` bilan boshlanadigan to'g'ri manzil yuboring.")
 
 async def handle(request):
     return web.Response(text="OK")
