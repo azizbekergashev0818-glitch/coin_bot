@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from aiohttp import web
 import aiohttp
 from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.fsm.context import FSMContext
@@ -21,9 +22,7 @@ class OrderState(StatesGroup):
 
 @router.callback_query(F.data == "order_insta")
 async def start_order(callback: types.CallbackQuery, state: FSMContext):
-  await callback.message.answer(
-      "Iltimos, Instagram profilingiz havolasini yuboring:"
-  )
+  await callback.message.answer("Link yuboring:")
   await state.set_state(OrderState.waiting_for_link)
   await callback.answer()
 
@@ -31,14 +30,14 @@ async def start_order(callback: types.CallbackQuery, state: FSMContext):
 @router.message(OrderState.waiting_for_link)
 async def process_link(message: types.Message, state: FSMContext):
   await state.update_data(link=message.text)
-  await message.answer("Nechta obunachi kerak? Faqat raqam kiriting:")
+  await message.answer("Soni (faqat raqam):")
   await state.set_state(OrderState.waiting_for_quantity)
 
 
 @router.message(OrderState.waiting_for_quantity)
 async def process_quantity(message: types.Message, state: FSMContext):
   if not message.text.isdigit():
-    await message.answer("Iltimos, faqat raqam kiriting!")
+    await message.answer("Faqat raqam kiriting!")
     return
 
   quantity = int(message.text)
@@ -57,19 +56,27 @@ async def process_quantity(message: types.Message, state: FSMContext):
     try:
       async with session.post(SEENSMS_API_URL, data=payload) as response:
         result = await response.json()
-
         if "order" in result:
-          await message.answer(
-              f"✅ Buyurtma qabul qilindi!\n🆔 ID: {result['order']}"
-          )
+          await message.answer(f"✅ ID: {result['order']}")
         else:
-          await message.answer(
-              f"❌ Xatolik: {result.get('error', 'Nomaal')}"
-          )
+          await message.answer(f"❌ Xato: {result.get('error', 'Nomaʼlum')}")
     except Exception as e:
-      await message.answer(f"❌ Xatolik: {e}")
+      await message.answer(f"❌ Xato: {e}")
 
   await state.clear()
+
+
+async def handle(request):
+  return web.Response(text="OK")
+
+
+async def web_server():
+  app = web.Application()
+  app.router.add_get("/", handle)
+  runner = web.AppRunner(app)
+  await runner.setup()
+  site = web.TCPSite(runner, "0.0.0.0", 10000)
+  await site.start()
 
 
 async def main():
@@ -77,6 +84,7 @@ async def main():
   bot = Bot(token=TELEGRAM_BOT_TOKEN)
   dp = Dispatcher()
   dp.include_router(router)
+  asyncio.create_task(web_server())
   await bot.delete_webhook(drop_pending_updates=True)
   await dp.start_polling(bot)
 
