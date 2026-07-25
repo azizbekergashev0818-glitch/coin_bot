@@ -4,9 +4,9 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-API_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk"
+API_TOKEN = "8884394536:AAEfDaTV8ra5Ije87PIecA..." # O'zingizning to'liq tokeningizni qo'ying
 
-bot = Bot("8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk")
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 def init_db():
@@ -31,7 +31,7 @@ def init_db():
 def add_user(user_id):
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
-    cursor.execute('INSERT OR IGNORE INTO users (user_id, coins) VALUES (?, ?)', (user_id, 10))
+    cursor.execute('INSERT OR IGNORE INTO users (user_id, coins) VALUES (?, 10)', (user_id,))
     conn.commit()
     conn.close()
 
@@ -49,6 +49,7 @@ def add_coins(user_id, amount):
     cursor.execute('UPDATE users SET coins = coins + ? WHERE user_id = ?', (amount, user_id))
     conn.commit()
     conn.close()
+
 def is_task_completed(user_id, task_id):
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
@@ -63,11 +64,11 @@ def mark_task_completed(user_id, task_id):
     cursor.execute('INSERT OR IGNORE INTO completed_tasks (user_id, task_id) VALUES (?, ?)', (user_id, task_id))
     conn.commit()
     conn.close()
-    
+
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [
-            KeyboardButton(text="💰 Balans"), 
+            KeyboardButton(text="💰 Balans"),
             KeyboardButton(text="➕ Tanga ishlash")
         ],
         [
@@ -75,7 +76,6 @@ main_menu = ReplyKeyboardMarkup(
         ]
     ],
     resize_keyboard=True
-)
 )
 
 @dp.message(Command("start"))
@@ -89,7 +89,7 @@ async def start_cmd(message: types.Message):
 @dp.message(F.text == "💰 Balans")
 async def balance_cmd(message: types.Message):
     coins = get_balance(message.from_user.id)
-    await message.answer(f"Sizning balansingiz: **{coins} coin**", parse_mode="Markdown")
+    await message.answer(f"Sizning balansingiz: {coins} coin")
 
 @dp.message(F.text == "➕ Tanga ishlash")
 async def earn_cmd(message: types.Message):
@@ -101,8 +101,7 @@ async def earn_cmd(message: types.Message):
     )
     await message.answer("Kanalga obuna bo'ling va 2 coin oling:", reply_markup=task_kb)
 
-
-    @dp.callback_query(F.data == "check_sub")
+@dp.callback_query(F.data == "check_sub")
 async def check_callback(call: types.CallbackQuery):
     task_id = "channel_1"
     
@@ -113,6 +112,7 @@ async def check_callback(call: types.CallbackQuery):
     add_coins(call.from_user.id, 2)
     mark_task_completed(call.from_user.id, task_id)
     await call.answer("Topshiriq bajarildi! +2 coin berildi 🎉", show_alert=True)
+
 @dp.message(F.text == "🚀 Buyurtma berish")
 async def order_cmd(message: types.Message):
     coins = get_balance(message.from_user.id)
