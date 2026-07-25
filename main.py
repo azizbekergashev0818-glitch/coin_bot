@@ -15,7 +15,7 @@ SEENSMS_API_URL = "https://seensms.uz/api/v2"
 SEENSMS_API_TOKEN = "JQVUUMxTraOhMFXbukUAtjCkNY9VUBhK"
 SERVICE_ID = 452
 
-REQUIRED_CHANNEL = "@telegram"  # Majburiy obuna kanali (bot shu kanalda admin bo'lishi shart!)
+REQUIRED_CHANNEL = "@telegram"
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
@@ -141,14 +141,14 @@ async def check_callback(call: types.CallbackQuery):
 async def order_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     
-    # Admin uchun obuna tekshirilmaydi
     if user_id != ADMIN_ID:
         try:
             member = await bot.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
             if member.status in ["left", "kicked"]:
                 sub_kb = InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text="📢 Kanalga obuna bo'lish", url=f"https://t.me/{REQUIRED_CHANNEL.replace('@', '')}")]
+                        [InlineKeyboardButton(text="📢 Kanalga obuna bo'lish", url=f"https://t.me/{REQUIRED_CHANNEL.replace('@', '')}")],
+                        [InlineKeyboardButton(text="🔄 Tekshirish", callback_data="check_force_sub")]
                     ]
                 )
                 await message.answer(f"❌ Botdan foydalanish uchun avval quyidagi kanalga obuna bo'ling:", reply_markup=sub_kb)
@@ -163,6 +163,24 @@ async def order_cmd(message: types.Message, state: FSMContext):
     else:
         await state.set_state(OrderState.waiting_for_link)
         await message.answer("Buyurtma berish uchun kanal yoki instagram manzilingizni yozing (masalan: @kanal_nomi yoki link):")
+
+@dp.callback_query(F.data == "check_force_sub")
+async def check_force_sub_callback(call: types.CallbackQuery, state: FSMContext):
+    user_id = call.from_user.id
+    try:
+        member = await bot.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
+        if member.status in ["left", "kicked"]:
+            await call.answer("❌ Siz hali kanalga obuna bo'lmadingiz!", show_alert=True)
+        else:
+            await call.message.delete()
+            coins = get_balance(user_id)
+            if coins < 10:
+                await call.message.answer(f"Sizda coin yetarli emas. Balans: {coins} coin\nMinimum 10 coin kerak!")
+            else:
+                await state.set_state(OrderState.waiting_for_link)
+                await call.message.answer("Rahmat! Endi buyurtma berish uchun kanal yoki instagram manzilingizni yozing (masalan: @kanal_nomi yoki link):")
+    except Exception as e:
+        await call.answer(f"Xatolik: {e}", show_alert=True)
 
 @dp.message(OrderState.waiting_for_link, F.text.startswith("@") | F.text.startswith("http"))
 async def process_order(message: types.Message, state: FSMContext):
