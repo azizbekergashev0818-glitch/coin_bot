@@ -9,7 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 API_TOKEN = "8884394536:AAEfDaTV8ra5Ije87PIecA"
 ADMIN_ID = 6913959674
 
-bot = Bot("8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk")
+bot = Bot("8884394536:AAEfDaTV8ra5Ije87PIecA") 
 dp = Dispatcher()
 
 class OrderState(StatesGroup):
@@ -42,6 +42,8 @@ def add_user(user_id):
     conn.close()
 
 def get_balance(user_id):
+    if user_id == ADMIN_ID:
+        return 9999999  # Admin uchun cheksiz balans
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
     cursor.execute('SELECT coins FROM users WHERE user_id = ?', (user_id,))
@@ -50,6 +52,8 @@ def get_balance(user_id):
     return res[0] if res else 0
 
 def add_coins(user_id, amount):
+    if user_id == ADMIN_ID:
+        return  # Adminning tangasi kamaytirilmaydi
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET coins = coins + ? WHERE user_id = ?', (amount, user_id))
@@ -94,8 +98,12 @@ async def start_cmd(message: types.Message):
 
 @dp.message(F.text == "💰 Balans")
 async def balance_cmd(message: types.Message):
-    coins = get_balance(message.from_user.id)
-    await message.answer(f"Sizning balansingiz: {coins} coin")
+    user_id = message.from_user.id
+    if user_id == ADMIN_ID:
+        await message.answer("Siz Adminsiz! Sizning balansingiz: ♾️ Cheksiz coin")
+    else:
+        coins = get_balance(user_id)
+        await message.answer(f"Sizning balansingiz: {coins} coin")
 
 @dp.message(F.text == "➕ Tanga ishlash")
 async def earn_cmd(message: types.Message):
