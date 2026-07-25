@@ -4,6 +4,8 @@ import aiohttp
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 API_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk"  
@@ -13,10 +15,13 @@ SEENSMS_API_URL = "https://seensms.uz/api/v2"
 SEENSMS_API_TOKEN = "JQVUUMxTraOhMFXbukUAtjCkNY9VUBhK"
 SERVICE_ID = 452
 
-REQUIRED_CHANNEL = "@telegram"  # Majburiy obuna kanali (o'zingizning kanal username yozing)
+REQUIRED_CHANNEL = "@telegram"  # Majburiy obuna kanali (bot shu kanalda admin bo'lishi shart!)
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
+
+class OrderState(StatesGroup):
+    waiting_for_link = State()
 
 def init_db():
     conn = sqlite3.connect('bot_database.db')
@@ -94,7 +99,8 @@ main_menu = ReplyKeyboardMarkup(
 )
 
 @dp.message(Command("start"))
-async def start_cmd(message: types.Message):
+async def start_cmd(message: types.Message, state: FSMContext):
+    await state.clear()
     add_user(message.from_user.id)
     await message.answer(
         "Xush kelibsiz! Botimizga xush kelibsiz.",
@@ -131,9 +137,8 @@ async def check_callback(call: types.CallbackQuery):
     mark_task_completed(call.from_user.id, task_id)
     await call.answer("Topshiriq bajarildi! +2 coin berildi 🎉", show_alert=True)
 
-# "🚀 Buyurtma berish" tugmasi bosilganda avval obunani tekshiramiz
 @dp.message(F.text == "🚀 Buyurtma berish")
-async def order_cmd(message: types.Message):
+async def order_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     
     # Admin uchun obuna tekshirilmaydi
@@ -149,16 +154,18 @@ async def order_cmd(message: types.Message):
                 await message.answer(f"❌ Botdan foydalanish uchun avval quyidagi kanalga obuna bo'ling:", reply_markup=sub_kb)
                 return
         except Exception as e:
-            print(f"Obunani tekshirishda xato (bot kanalda admin bo'lishi kerak): {e}")
+            await message.answer(f"⚠️ Obunani tekshirishda xatolik (Bot ko'rsatilgan kanalda admin bo'lishi kerak): {e}")
+            return
 
     coins = get_balance(user_id)
     if coins < 10:
         await message.answer(f"Sizda coin yetarli emas. Balans: {coins} coin\nMinimum 10 coin kerak!")
     else:
+        await state.set_state(OrderState.waiting_for_link)
         await message.answer("Buyurtma berish uchun kanal yoki instagram manzilingizni yozing (masalan: @kanal_nomi yoki link):")
 
-@dp.message(F.text.startswith("@") | F.text.startswith("http"))
-async def process_order(message: types.Message):
+@dp.message(OrderState.waiting_for_link, F.text.startswith("@") | F.text.startswith("http"))
+async def process_order(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     coins = get_balance(user_id)
     
@@ -192,6 +199,12 @@ async def process_order(message: types.Message):
             )
         except Exception as e:
             print(f"Adminga xabar yuborishda xato: {e}")
+            
+    await state.clear()
+
+@dp.message(OrderState.waiting_for_link)
+async def wrong_link_format(message: types.Message):
+    await message.answer("❌ Noto'g'ri format! Iltimos, `@` yoki `http` bilan boshlanadigan to'g'ri manzil yuboring.")
 
 async def handle(request):
     return web.Response(text="OK")
