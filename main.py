@@ -13,6 +13,9 @@ SEENSMS_API_URL = "https://seensms.uz/api/v2"
 SEENSMS_API_TOKEN = "JQVUUMxTraOhMFXbukUAtjCkNY9VUBhK"
 SERVICE_ID = 452
 
+# Majburiy obuna tekshiriladigan kanal username yoki ID si
+REQUIRED_CHANNEL = "@telegram" 
+
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
@@ -55,7 +58,7 @@ def get_balance(user_id):
 
 def add_coins(user_id, amount):
     if user_id == ADMIN_ID:
-        return  # Sizning balansingiz o'zgarmaydi (cheksiz qoladi)
+        return  
         
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
@@ -137,9 +140,21 @@ async def order_cmd(message: types.Message):
     else:
         await message.answer("Buyurtma berish uchun kanal yoki instagram manzilingizni yozing (masalan: @kanal_nomi yoki link):")
 
+# Havola yuborilganda oldin obunani tekshiramiz
 @dp.message(F.text.startswith("@") | F.text.startswith("http"))
 async def process_order(message: types.Message):
     user_id = message.from_user.id
+    
+    # Admin uchun obuna shart emas, qolganlar uchun tekshiramiz
+    if user_id != ADMIN_ID:
+        try:
+            member = await bot.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
+            if member.status in ["left", "kicked"]:
+                await message.answer(f"❌ Botdan foydalanish uchun avval {REQUIRED_CHANNEL} kanaliga obuna bo'ling!")
+                return
+        except Exception:
+            pass  # Agar bot kanalda admin bo'lmasa xato bermasligi uchun
+
     coins = get_balance(user_id)
     
     if coins >= 10:
@@ -158,7 +173,7 @@ async def process_order(message: types.Message):
                 async with session.post(SEENSMS_API_URL, data=payload) as response:
                     result = await response.json()
                     if "order" in result:
-                        add_coins(user_id, -10)  # Admin uchun bu funksiya ishlamaydi, tangasi ketmaydi
+                        add_coins(user_id, -10)  
                         await message.answer(f"🚀 Buyurtma qabul qilindi!\n🆔 ID: {result['order']}")
                     else:
                         await message.answer(f"❌ Xato: {result.get('error', 'Nomaʼlum')}")
