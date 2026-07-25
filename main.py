@@ -18,6 +18,13 @@ def init_db():
             coins INTEGER DEFAULT 0
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS completed_tasks (
+            user_id INTEGER,
+            task_id TEXT,
+            PRIMARY KEY (user_id, task_id)
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -42,7 +49,21 @@ def add_coins(user_id, amount):
     cursor.execute('UPDATE users SET coins = coins + ? WHERE user_id = ?', (amount, user_id))
     conn.commit()
     conn.close()
+def is_task_completed(user_id, task_id):
+    conn = sqlite3.connect('bot_database.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT 1 FROM completed_tasks WHERE user_id = ? AND task_id = ?', (user_id, task_id))
+    res = cursor.fetchone()
+    conn.close()
+    return res is not None
 
+def mark_task_completed(user_id, task_id):
+    conn = sqlite3.connect('bot_database.db')
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR IGNORE INTO completed_tasks (user_id, task_id) VALUES (?, ?)', (user_id, task_id))
+    conn.commit()
+    conn.close()
+    
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [
@@ -80,11 +101,18 @@ async def earn_cmd(message: types.Message):
     )
     await message.answer("Kanalga obuna bo'ling va 2 coin oling:", reply_markup=task_kb)
 
-@dp.callback_query(F.data == "check_sub")
+
+    @dp.callback_query(F.data == "check_sub")
 async def check_callback(call: types.CallbackQuery):
-    add_coins(call.from_user.id, 2)
-    await call.answer("Topshiriq bajarildi! +2 coin qo'shildi.", show_alert=True)
+    task_id = "channel_1"
     
+    if is_task_completed(call.from_user.id, task_id):
+        await call.answer("Siz bu topshiriq uchun allaqachon coin olgansiz!", show_alert=True)
+        return
+
+    add_coins(call.from_user.id, 2)
+    mark_task_completed(call.from_user.id, task_id)
+    await call.answer("Topshiriq bajarildi! +2 coin berildi 🎉", show_alert=True)
 @dp.message(F.text == "🚀 Buyurtma berish")
 async def order_cmd(message: types.Message):
     coins = get_balance(message.from_user.id)
