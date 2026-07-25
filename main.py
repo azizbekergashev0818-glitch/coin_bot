@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-API_TOKEN = "SIZNING_BOTFATHERDAN_OLGAN_TOKENINGIZ"  
+API_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk"  
 ADMIN_ID = 6913959674
 
 bot = Bot(token=API_TOKEN)
