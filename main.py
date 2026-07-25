@@ -1,13 +1,17 @@
+import asyncio
+import logging
 import aiohttp
-from aiogram import F, Router, types
+from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-router = Router()
+TELEGRAM_BOT_TOKEN = "8884394536:AAEfDaTV8rA5lje87PlecAmT6CGE5zNuhGk"
 
 SEENSMS_API_URL = "https://seensms.uz/api/v2"
 SEENSMS_API_TOKEN = "JQVUUMxTraOhMFXbukUAtjCkNY9VUBhK"
 SERVICE_ID = 452
+
+router = Router()
 
 
 class OrderState(StatesGroup):
@@ -18,7 +22,7 @@ class OrderState(StatesGroup):
 @router.callback_query(F.data == "order_insta")
 async def start_order(callback: types.CallbackQuery, state: FSMContext):
   await callback.message.answer(
-      "Iltimos, Instagram profilingiz havolasini (linkini) yuboring:"
+      "Iltimos, Instagram profilingiz havolasini yuboring:"
   )
   await state.set_state(OrderState.waiting_for_link)
   await callback.answer()
@@ -27,10 +31,7 @@ async def start_order(callback: types.CallbackQuery, state: FSMContext):
 @router.message(OrderState.waiting_for_link)
 async def process_link(message: types.Message, state: FSMContext):
   await state.update_data(link=message.text)
-  await message.answer(
-      "Nechta obunachi kerak? (Min: 100, Max: 5000000):\n"
-      "Faqat raqam yozib yuboring (masalan: 500)"
-  )
+  await message.answer("Nechta obunachi kerak? Faqat raqam kiriting:")
   await state.set_state(OrderState.waiting_for_quantity)
 
 
@@ -58,17 +59,27 @@ async def process_quantity(message: types.Message, state: FSMContext):
         result = await response.json()
 
         if "order" in result:
-          order_id = result["order"]
           await message.answer(
-              f"✅ **Buyurtma muvaffaqiyatli qabul qilindi!**\n\n"
-              f"🆔 Buyurtma raqami: {order_id}\n"
-              f"🔗 Havola: {link}\n"
-              f"👥 Soni: {quantity} ta"
+              f"✅ Buyurtma qabul qilindi!\n🆔 ID: {result['order']}"
           )
         else:
-          error_msg = result.get("error", "Noma'lum xatolik")
-          await message.answer(f"❌ Xatolik yuz berdi: {error_msg}")
+          await message.answer(
+              f"❌ Xatolik: {result.get('error', 'Nomaal')}"
+          )
     except Exception as e:
-      await message.answer(f"❌ Server bilan bog'lanishda xatolik: {e}")
+      await message.answer(f"❌ Xatolik: {e}")
 
   await state.clear()
+
+
+async def main():
+  logging.basicConfig(level=logging.INFO)
+  bot = Bot(token=TELEGRAM_BOT_TOKEN)
+  dp = Dispatcher()
+  dp.include_router(router)
+  await bot.delete_webhook(drop_pending_updates=True)
+  await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+  asyncio.run(main())
