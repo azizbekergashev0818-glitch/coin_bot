@@ -20,6 +20,12 @@ class OrderState(StatesGroup):
   waiting_for_quantity = State()
 
 
+@router.message(F.text == "🚀 Buyurtma berish")
+async def cmd_buyurtma(message: types.Message, state: FSMContext):
+  await message.answer("Link yuboring:")
+  await state.set_state(OrderState.waiting_for_link)
+
+
 @router.callback_query(F.data == "order_insta")
 async def start_order(callback: types.CallbackQuery, state: FSMContext):
   await callback.message.answer("Link yuboring:")
